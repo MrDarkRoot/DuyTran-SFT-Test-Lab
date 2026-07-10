@@ -1,0 +1,61 @@
+name: Ref Pinning Lab
+
+on:
+  push:
+    branches:
+      - lab/ref-pinning
+
+permissions:
+  contents: write
+
+jobs:
+  advance-ref:
+    runs-on: ubuntu-latest
+    outputs:
+      advanced_sha: ${{ steps.advance.outputs.advanced_sha }}
+    steps:
+      - name: Checkout triggering commit
+        uses: actions/checkout@v5
+
+      - name: Advance branch after event creation
+        id: advance
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf 'advanced by run %s\n' "$GITHUB_RUN_ID" > ref-advanced.txt
+          git add ref-advanced.txt
+          git commit -m "lab: advance mutable ref [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "advanced_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  checkout-event:
+    needs: advance-ref
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout using event defaults after branch moved
+        uses: actions/checkout@v5
+
+      - name: Verify checkout identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVENT_SHA="$GITHUB_SHA"
+          CHECKED_OUT_SHA="$(git rev-parse HEAD)"
+          git fetch origin "$GITHUB_REF_NAME"
+          REMOTE_SHA="$(git rev-parse "origin/$GITHUB_REF_NAME")"
+
+          {
+            echo "## Ref pinning result"
+            echo
+            echo "- event SHA: \`$EVENT_SHA\`"
+            echo "- checked-out SHA: \`$CHECKED_OUT_SHA\`"
+            echo "- current remote branch SHA: \`$REMOTE_SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          printf 'EVENT_SHA=%s\nCHECKED_OUT_SHA=%s\nREMOTE_SHA=%s\n' \
+            "$EVENT_SHA" "$CHECKED_OUT_SHA" "$REMOTE_SHA"
+
+          test "$CHECKED_OUT_SHA" = "$EVENT_SHA"
+          test "$REMOTE_SHA" != "$EVENT_SHA"
