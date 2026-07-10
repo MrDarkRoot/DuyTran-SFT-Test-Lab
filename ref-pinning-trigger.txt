@@ -1,1 +1,0 @@
-safe GitHub ref-pinning test
