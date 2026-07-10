@@ -9,12 +9,15 @@ on:
 
 permissions:
   actions: write
-  contents: read
+  contents: write
 
 jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout launcher ref
+        uses: actions/checkout@v5
+
       - name: Dispatch target workflow on selected branch
         shell: bash
         env:
@@ -30,3 +33,14 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "${API_URL}/repos/${REPOSITORY}/actions/workflows/ref-pinning-dispatch-target.yml/dispatches" \
             -d '{"ref":"lab/ref-dispatch"}'
+
+      - name: Move branch after dispatch and record success
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf 'launcher dispatched target from %s in run %s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > dispatch-launcher-success.txt
+          git add dispatch-launcher-success.txt
+          git commit -m "lab: move branch after dispatch [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
